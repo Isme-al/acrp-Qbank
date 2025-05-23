@@ -56,7 +56,7 @@ div.stButton > button:hover { background-color: #0e5c99; }
 # ── 3) Top navigation bar + Query-param routing ──────────────────
 pages = ["Dashboard", "Create Test", "Clinical Research Library"]
 nav_buttons = "".join(
-    f"<button onclick=\"window.location.search='?page={p}'\">{p}</button>"
+    f"<button onclick=\"window.location.search='?page='+encodeURIComponent('{p}')\">{p}</button>"
     for p in pages
 )
 st.markdown(f"""
@@ -68,12 +68,10 @@ st.markdown(f"""
 </div>
 """, unsafe_allow_html=True)
 
-# Use URL query params for page routing
 params = st.query_params
 page = params.get("page", [pages[0]])[0]
 if page not in pages:
     page = pages[0]
-
 
 # ── 4) Load questions ─────────────────────────────────────────────
 @st.cache_data
@@ -92,14 +90,12 @@ def load_questions():
 
 QUESTION_BANK = load_questions()
 
-
 # ── 5) Session state defaults ─────────────────────────────────────
 if 'test_questions' not in st.session_state:
     st.session_state.update({
         'test_questions': [], 'test_index': 0,
         'test_answers': {}, 'test_submitted': False, 'test_start': None
     })
-
 
 # ── 6) Page definitions ───────────────────────────────────────────
 def dashboard_page():
@@ -171,7 +167,7 @@ def create_test_page():
 
         c1, c2 = st.columns(2)
         with c1:
-            if idx > 0 and st.button("← Previous"): 
+            if idx > 0 and st.button("← Previous"):
                 st.session_state['test_index'] -= 1; st.rerun()
         with c2:
             if idx < total-1 and st.button("Next →"):
