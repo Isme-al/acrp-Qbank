@@ -53,10 +53,10 @@ div.stButton > button:hover { background-color: #0e5c99; }
 </style>
 """, unsafe_allow_html=True)
 
-# ── 3) Top navigation bar (HTML) ─────────────────────────────────
+# ── 3) Top navigation bar + Query-param routing ──────────────────
 pages = ["Dashboard", "Create Test", "Clinical Research Library"]
 nav_buttons = "".join(
-    f"<button onclick=\"window.location.hash='{p}'\">{p}</button>"
+    f"<button onclick=\"window.location.search='?page={p}'\">{p}</button>"
     for p in pages
 )
 st.markdown(f"""
@@ -68,14 +68,14 @@ st.markdown(f"""
 </div>
 """, unsafe_allow_html=True)
 
-# ── 4) Page routing using the new API ─────────────────────────────
+# Use URL query params for page routing
 params = st.query_params
-current_hash = params.get("hash", [pages[0]])[0]
-if current_hash not in pages:
-    current_hash = pages[0]
-page = current_hash
+page = params.get("page", [pages[0]])[0]
+if page not in pages:
+    page = pages[0]
 
-# ── 5) Load questions ─────────────────────────────────────────────
+
+# ── 4) Load questions ─────────────────────────────────────────────
 @st.cache_data
 def load_questions():
     df = pd.read_csv("questions_extracted.csv", encoding="utf-8-sig", dtype=str)
@@ -92,14 +92,16 @@ def load_questions():
 
 QUESTION_BANK = load_questions()
 
-# ── 6) Session state defaults ─────────────────────────────────────
+
+# ── 5) Session state defaults ─────────────────────────────────────
 if 'test_questions' not in st.session_state:
     st.session_state.update({
         'test_questions': [], 'test_index': 0,
         'test_answers': {}, 'test_submitted': False, 'test_start': None
     })
 
-# ── 7) Page definitions ───────────────────────────────────────────
+
+# ── 6) Page definitions ───────────────────────────────────────────
 def dashboard_page():
     st.markdown("### Dashboard")
     st.write("Welcome! Use 'Create Test' to generate a new question set.")
