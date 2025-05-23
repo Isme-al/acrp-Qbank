@@ -19,7 +19,6 @@ st.markdown("""
 # ── 2) UWorld-style CSS overrides ─────────────────────────────────
 st.markdown("""
 <style>
-/* Top navbar styling */
 .navbar {
   background-color: #1f77b4;
   padding: .75rem 1rem;
@@ -29,45 +28,28 @@ st.markdown("""
   justify-content: space-between;
 }
 .navbar-title { font-size: 1.5rem; font-weight: 600; }
-/* Render page-nav buttons as links */
 .navbar-nav button {
-  background: transparent;
-  border: none;
-  color: white;
-  margin-left: 1rem;
-  font-size: 1rem;
-  cursor: pointer;
+  background: transparent; border: none; color: white;
+  margin-left: 1rem; font-size: 1rem; cursor: pointer;
 }
 .navbar-nav button:hover { text-decoration: underline; }
-/* Style any Streamlit radio as a “card” */
+
 div.stRadio > label {
-  display: block;
-  background: #f8f9fa;
-  padding: 1rem;
-  margin: .3rem 0;
-  border-radius: .5rem;
-  cursor: pointer;
+  display: block; background: #f8f9fa; padding: 1rem;
+  margin: .3rem 0; border-radius: .5rem; cursor: pointer;
   font-size: 1.1rem;
 }
 div.stRadio > label:hover { background: #e9ecef; }
-/* Highlight selected card */
 div.stRadio > label > div[aria-checked="true"] {
-  border: 2px solid #1f77b4 !important;
-  background: #e1ecf9 !important;
+  border: 2px solid #1f77b4 !important; background: #e1ecf9 !important;
 }
-/* Make buttons full-width, UWorld blue */
+
 div.stButton > button {
-  width: 100%;
-  padding: .75rem;
-  font-size: 1rem;
-  color: white;
-  background-color: #1f77b4;
-  border: none;
-  border-radius: .375rem;
+  width: 100%; padding: .75rem; font-size: 1rem;
+  color: white; background-color: #1f77b4;
+  border: none; border-radius: .375rem;
 }
-div.stButton > button:hover {
-  background-color: #0e5c99;
-}
+div.stButton > button:hover { background-color: #0e5c99; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -86,12 +68,14 @@ st.markdown(f"""
 </div>
 """, unsafe_allow_html=True)
 
-# Use URL hash for page routing
-current_hash = st.experimental_get_query_params().get("hash", [pages[0]])[0]
-page = current_hash if current_hash in pages else pages[0]
+# ── 4) Page routing using the new API ─────────────────────────────
+params = st.query_params
+current_hash = params.get("hash", [pages[0]])[0]
+if current_hash not in pages:
+    current_hash = pages[0]
+page = current_hash
 
-
-# ── 4) Load questions ─────────────────────────────────────────────
+# ── 5) Load questions ─────────────────────────────────────────────
 @st.cache_data
 def load_questions():
     df = pd.read_csv("questions_extracted.csv", encoding="utf-8-sig", dtype=str)
@@ -108,32 +92,28 @@ def load_questions():
 
 QUESTION_BANK = load_questions()
 
-
-# ── 5) Session state defaults ─────────────────────────────────────
+# ── 6) Session state defaults ─────────────────────────────────────
 if 'test_questions' not in st.session_state:
     st.session_state.update({
         'test_questions': [], 'test_index': 0,
         'test_answers': {}, 'test_submitted': False, 'test_start': None
     })
 
-
-# ── 6) Page definitions ───────────────────────────────────────────
+# ── 7) Page definitions ───────────────────────────────────────────
 def dashboard_page():
     st.markdown("### Dashboard")
     st.write("Welcome! Use 'Create Test' to generate a new question set.")
 
-
 def create_test_page():
     st.markdown("### Create Test")
-
     total = len(QUESTION_BANK)
     attempted = set(st.session_state['test_answers'].keys())
-    count_unused  = total - len(attempted)
-    count_corr    = sum(
+    count_unused = total - len(attempted)
+    count_corr = sum(
         i in attempted and st.session_state['test_answers'][i] == q['options'][q['answer']]
         for i, q in enumerate(QUESTION_BANK)
     )
-    count_incorr  = sum(
+    count_incorr = sum(
         i in attempted and st.session_state['test_answers'][i] != q['options'][q['answer']]
         for i, q in enumerate(QUESTION_BANK)
     )
@@ -146,7 +126,6 @@ def create_test_page():
     correct   = cols[4].checkbox(f"Correct ({count_corr})")
     st.markdown("---")
 
-    # Topics filter
     st.subheader("Subjects")
     topics = sorted({q['topic'] for q in QUESTION_BANK})
     cols_subj = st.columns(2)
@@ -157,7 +136,6 @@ def create_test_page():
         topic_sel[topic] = col.checkbox(f"{topic} ({cnt})", True)
     st.markdown("---")
 
-    # Number of questions
     st.subheader("No. of Questions")
     max_q = st.number_input("Max per block", 1, total, min(40, total), 1)
     st.markdown("---")
@@ -166,10 +144,10 @@ def create_test_page():
         filt = []
         for i, q in enumerate(QUESTION_BANK):
             ok = True
-            if not unused    and i not in attempted: ok = False
-            if not incorrect and i in attempted and st.session_state['test_answers'][i] != q['options'][q['answer']]: ok=False
-            if not correct   and i in attempted and st.session_state['test_answers'][i] == q['options'][q['answer']]: ok=False
-            if not topic_sel.get(q['topic'], False): ok=False
+            if not unused and i not in attempted: ok = False
+            if not incorrect and i in attempted and st.session_state['test_answers'][i] != q['options'][q['answer']]: ok = False
+            if not correct and i in attempted and st.session_state['test_answers'][i] == q['options'][q['answer']]: ok = False
+            if not topic_sel.get(q['topic'], False): ok = False
             if ok: filt.append(q)
         n = min(max_q, len(filt))
         st.session_state.update({
@@ -191,7 +169,7 @@ def create_test_page():
 
         c1, c2 = st.columns(2)
         with c1:
-            if idx > 0 and st.button("← Previous"):
+            if idx > 0 and st.button("← Previous"): 
                 st.session_state['test_index'] -= 1; st.rerun()
         with c2:
             if idx < total-1 and st.button("Next →"):
@@ -221,13 +199,11 @@ def create_test_page():
             st.markdown("---")
             st.success(f"Final Score: {score} / {len(st.session_state['test_questions'])}")
 
-
 def library_page():
     st.markdown("### Clinical Research Library")
     st.write("Browse study resources here.")
 
-
-# ── 7) Render the selected page ────────────────────────────────────
+# ── 8) Render the selected page ────────────────────────────────────
 if page == "Dashboard":
     dashboard_page()
 elif page == "Create Test":
