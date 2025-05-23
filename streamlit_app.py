@@ -3,133 +3,194 @@ import pandas as pd
 import random
 import time
 
-# ── Page config ──
-st.set_page_config(page_title="Clinical Research QBank", layout="wide")
+# ── 1) Page config & hide Streamlit chrome ────────────────────────
+st.set_page_config(
+    page_title="ACRP QBank",
+    layout="wide",
+    initial_sidebar_state="collapsed"
+)
+st.markdown("""
+    <style>
+      /* hide menu and footer */
+      #MainMenu, footer { visibility: hidden; }
+    </style>
+""", unsafe_allow_html=True)
 
-# ── Load questions from CSV ──
+# ── 2) UWorld-style CSS overrides ─────────────────────────────────
+st.markdown("""
+<style>
+/* Top navbar styling */
+.navbar {
+  background-color: #1f77b4;
+  padding: .75rem 1rem;
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.navbar-title { font-size: 1.5rem; font-weight: 600; }
+/* Render page-nav buttons as links */
+.navbar-nav button {
+  background: transparent;
+  border: none;
+  color: white;
+  margin-left: 1rem;
+  font-size: 1rem;
+  cursor: pointer;
+}
+.navbar-nav button:hover { text-decoration: underline; }
+/* Style any Streamlit radio as a “card” */
+div.stRadio > label {
+  display: block;
+  background: #f8f9fa;
+  padding: 1rem;
+  margin: .3rem 0;
+  border-radius: .5rem;
+  cursor: pointer;
+  font-size: 1.1rem;
+}
+div.stRadio > label:hover { background: #e9ecef; }
+/* Highlight selected card */
+div.stRadio > label > div[aria-checked="true"] {
+  border: 2px solid #1f77b4 !important;
+  background: #e1ecf9 !important;
+}
+/* Make buttons full-width, UWorld blue */
+div.stButton > button {
+  width: 100%;
+  padding: .75rem;
+  font-size: 1rem;
+  color: white;
+  background-color: #1f77b4;
+  border: none;
+  border-radius: .375rem;
+}
+div.stButton > button:hover {
+  background-color: #0e5c99;
+}
+</style>
+""", unsafe_allow_html=True)
+
+
+# ── 3) Top navigation bar (HTML) ─────────────────────────────────
+pages = ["Dashboard", "Create Test", "Clinical Research Library"]
+st.markdown(f"""
+<div class="navbar">
+  <div class="navbar-title">ACRP QBank</div>
+  <div class="navbar-nav">
+    {''.join(f'<button onclick="window.location.hash = \\'{p}\\'">{p}</button>' for p in pages)}
+  </div>
+</div>
+""", unsafe_allow_html=True)
+
+# sync hash → page
+current = st.experimental_get_query_params().get("hash", [pages[0]])[0]
+page = current if current in pages else pages[0]
+# fallback: let users click buttons to change URL hash
+
+
+# ── 4) Load questions ─────────────────────────────────────────────
 @st.cache_data
 def load_questions():
     df = pd.read_csv("questions_extracted.csv", encoding="utf-8-sig", dtype=str)
-    questions = []
+    qs = []
     for _, r in df.iterrows():
-        questions.append({
+        qs.append({
             "question":    r["question"],
             "options":     [r["option_A"], r["option_B"], r["option_C"], r["option_D"]],
             "answer":      ["A","B","C","D"].index(r["answer"].strip().upper()),
             "explanation": r.get("explanation", ""),
             "topic":       r.get("topic", "")
         })
-    return questions
+    return qs
 
 QUESTION_BANK = load_questions()
 
-# ── Session state defaults ──
+
+# ── 5) Session state defaults ─────────────────────────────────────
 if 'test_questions' not in st.session_state:
     st.session_state.update({
-        'test_questions': [],
-        'test_index': 0,
-        'test_answers': {},
-        'test_submitted': False,
-        'test_start': None
+        'test_questions': [], 'test_index': 0,
+        'test_answers': {}, 'test_submitted': False, 'test_start': None
     })
 
-# ── Sidebar navigation ──
-with st.sidebar:
-    st.title("Clinical Research QBank")
-    page = st.radio("Navigate", ["Dashboard", "Create Test", "Clinical Research Library"] )
 
-# ── Dashboard ──
+# ── 6) Page definitions ───────────────────────────────────────────
 def dashboard_page():
-    st.header("Dashboard")
+    st.markdown("### Dashboard")
     st.write("Welcome! Use 'Create Test' to generate a new question set.")
 
-# ── Create Test ──
+
 def create_test_page():
-    st.header("Create Test")
+    st.markdown("### Create Test")
 
     total = len(QUESTION_BANK)
     attempted = set(st.session_state['test_answers'].keys())
-    count_unused    = total - len(attempted)
-    count_correct   = sum(
-        1 for i,q in enumerate(QUESTION_BANK)
-        if i in attempted and st.session_state['test_answers'][i] == q['options'][q['answer']]
-    )
-    count_incorrect = sum(
-        1 for i,q in enumerate(QUESTION_BANK)
-        if i in attempted and st.session_state['test_answers'][i] != q['options'][q['answer']]
-    )
+    count_unused  = total - len(attempted)
+    count_corr    = sum(i in attempted and st.session_state['test_answers'][i] == q['options'][q['answer']]
+                        for i,q in enumerate(QUESTION_BANK))
+    count_incorr  = sum(i in attempted and st.session_state['test_answers'][i] != q['options'][q['answer']]
+                        for i,q in enumerate(QUESTION_BANK))
 
-    # Question Mode filters
     cols = st.columns(5)
-    unused    = cols[0].checkbox(f"Unused ({count_unused})", value=True)
-    incorrect = cols[1].checkbox(f"Incorrect ({count_incorrect})")
+    unused    = cols[0].checkbox(f"Unused ({count_unused})", True)
+    incorrect = cols[1].checkbox(f"Incorrect ({count_incorr})")
     marked    = cols[2].checkbox("Marked (0)")
     omitted   = cols[3].checkbox("Omitted (0)")
-    correct   = cols[4].checkbox(f"Correct ({count_correct})")
+    correct   = cols[4].checkbox(f"Correct ({count_corr})")
     st.markdown("---")
 
-    # Subject filters
+    # Topics filter
     st.subheader("Subjects")
     topics = sorted({q['topic'] for q in QUESTION_BANK})
     cols_subj = st.columns(2)
-    topic_selection = {}
-    for idx, topic in enumerate(topics):
-        col = cols_subj[idx % 2]
-        cnt = sum(1 for q in QUESTION_BANK if q['topic'] == topic)
-        topic_selection[topic] = col.checkbox(f"{topic} ({cnt})", value=True)
+    topic_sel = {}
+    for idx_t, topic in enumerate(topics):
+        col = cols_subj[idx_t % 2]
+        cnt = sum(1 for q in QUESTION_BANK if q['topic']==topic)
+        topic_sel[topic] = col.checkbox(f"{topic} ({cnt})", True)
     st.markdown("---")
 
     # Number of questions
     st.subheader("No. of Questions")
-    max_q = st.number_input(
-        "Max allowed per block",
-        min_value=1, max_value=total,
-        value=min(40, total), step=1
-    )
+    max_q = st.number_input("Max per block", 1, total, min(40, total), 1)
     st.markdown("---")
 
-    # Generate Test
     if st.button("Generate Test"):
-        filtered = []
+        filt = []
         for i, q in enumerate(QUESTION_BANK):
             ok = True
-            if not unused and i not in attempted:
-                ok = False
-            if not incorrect and i in attempted and st.session_state['test_answers'][i] != q['options'][q['answer']]:
-                ok = False
-            if not correct and i in attempted and st.session_state['test_answers'][i] == q['options'][q['answer']]:
-                ok = False
-            if not topic_selection.get(q['topic'], False):
-                ok = False
-            if ok:
-                filtered.append(q)
-        n = min(max_q, len(filtered))
-        st.session_state['test_questions'] = random.sample(filtered, n)
-        st.session_state['test_index']     = 0
-        st.session_state['test_answers']   = {}
-        st.session_state['test_submitted'] = False
-        st.session_state['test_start']     = time.time()
+            if not unused    and i not in attempted: ok = False
+            if not incorrect and i in attempted   and st.session_state['test_answers'][i] != q['options'][q['answer']]: ok=False
+            if not correct   and i in attempted   and st.session_state['test_answers'][i] == q['options'][q['answer']]: ok=False
+            if not topic_sel.get(q['topic'], False): ok=False
+            if ok: filt.append(q)
+        n = min(max_q, len(filt))
+        st.session_state.update({
+            'test_questions': random.sample(filt, n),
+            'test_index':     0,
+            'test_answers':   {},
+            'test_submitted': False,
+            'test_start':     time.time()
+        })
         st.rerun()
 
-    # Render Test Questions
+    # Render test if generated
     if st.session_state['test_questions']:
         idx   = st.session_state['test_index']
         total = len(st.session_state['test_questions'])
         q     = st.session_state['test_questions'][idx]
 
-        st.subheader(f"Question {idx+1} of {total}   Topic: {q['topic']}")
-        st.write(q['question'])
-        choice = st.radio("Select an answer:", q['options'], key=f"ans{idx}")
+        st.markdown(f"#### Question {idx+1} of {total}   _(Topic: {q['topic']})_")
+        choice = st.radio("", q['options'], key=f"ans{idx}")
 
-        col1, col2 = st.columns(2)
-        with col1:
-            if idx > 0 and st.button("Previous"):
-                st.session_state['test_index'] -= 1
-                st.rerun()
-        with col2:
-            if idx < total - 1 and st.button("Next"):
-                st.session_state['test_index'] += 1
-                st.rerun()
+        c1, c2 = st.columns(2)
+        with c1:
+            if idx > 0 and st.button("← Previous"):
+                st.session_state['test_index'] -= 1; st.rerun()
+        with c2:
+            if idx < total-1 and st.button("Next →"):
+                st.session_state['test_index'] += 1; st.rerun()
 
         if st.button("Submit Answer"):
             st.session_state['test_answers'][idx] = choice
@@ -140,31 +201,32 @@ def create_test_page():
             if sel == corr:
                 st.success("Correct!")
             else:
-                st.error(f"Incorrect. Correct answer: {corr}")
+                st.error(f"Incorrect. Correct: {corr}")
             with st.expander("Explanation"):
                 st.write(q['explanation'])
 
-    # After submission (optional final submit)
-    if st.session_state['test_questions'] and idx == total - 1:
+    # Final score
+    if st.session_state['test_questions'] and st.session_state['test_index']==len(st.session_state['test_questions'])-1:
         if st.button("Submit Test"):
             st.session_state['test_submitted'] = True
         if st.session_state['test_submitted']:
             score = sum(
                 1 for i, q in enumerate(st.session_state['test_questions'])
-                if st.session_state['test_answers'].get(i) == q['options'][q['answer']]
+                if st.session_state['test_answers'].get(i)==q['options'][q['answer']]
             )
             st.markdown("---")
-            st.success(f"Final Score: {score} / {total}")
+            st.success(f"Final Score: {score} / {len(st.session_state['test_questions'])}")
 
-# ── Clinical Research Library ──
+
 def library_page():
-    st.header("Clinical Research Library")
+    st.markdown("### Clinical Research Library")
     st.write("Browse study resources here.")
 
-# ── Page router ──
+
+# ── 7) Render the selected page ────────────────────────────────────
 if page == "Dashboard":
     dashboard_page()
 elif page == "Create Test":
     create_test_page()
-elif page == "Clinical Research Library":
+else:
     library_page()
