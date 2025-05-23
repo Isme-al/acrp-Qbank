@@ -71,22 +71,24 @@ div.stButton > button:hover {
 </style>
 """, unsafe_allow_html=True)
 
-
 # ── 3) Top navigation bar (HTML) ─────────────────────────────────
 pages = ["Dashboard", "Create Test", "Clinical Research Library"]
+nav_buttons = "".join(
+    f"<button onclick=\"window.location.hash='{p}'\">{p}</button>"
+    for p in pages
+)
 st.markdown(f"""
 <div class="navbar">
   <div class="navbar-title">ACRP QBank</div>
   <div class="navbar-nav">
-    {''.join(f'<button onclick="window.location.hash = \\'{p}\\'">{p}</button>' for p in pages)}
+    {nav_buttons}
   </div>
 </div>
 """, unsafe_allow_html=True)
 
-# sync hash → page
-current = st.experimental_get_query_params().get("hash", [pages[0]])[0]
-page = current if current in pages else pages[0]
-# fallback: let users click buttons to change URL hash
+# Use URL hash for page routing
+current_hash = st.experimental_get_query_params().get("hash", [pages[0]])[0]
+page = current_hash if current_hash in pages else pages[0]
 
 
 # ── 4) Load questions ─────────────────────────────────────────────
@@ -127,10 +129,14 @@ def create_test_page():
     total = len(QUESTION_BANK)
     attempted = set(st.session_state['test_answers'].keys())
     count_unused  = total - len(attempted)
-    count_corr    = sum(i in attempted and st.session_state['test_answers'][i] == q['options'][q['answer']]
-                        for i,q in enumerate(QUESTION_BANK))
-    count_incorr  = sum(i in attempted and st.session_state['test_answers'][i] != q['options'][q['answer']]
-                        for i,q in enumerate(QUESTION_BANK))
+    count_corr    = sum(
+        i in attempted and st.session_state['test_answers'][i] == q['options'][q['answer']]
+        for i, q in enumerate(QUESTION_BANK)
+    )
+    count_incorr  = sum(
+        i in attempted and st.session_state['test_answers'][i] != q['options'][q['answer']]
+        for i, q in enumerate(QUESTION_BANK)
+    )
 
     cols = st.columns(5)
     unused    = cols[0].checkbox(f"Unused ({count_unused})", True)
@@ -147,7 +153,7 @@ def create_test_page():
     topic_sel = {}
     for idx_t, topic in enumerate(topics):
         col = cols_subj[idx_t % 2]
-        cnt = sum(1 for q in QUESTION_BANK if q['topic']==topic)
+        cnt = sum(1 for q in QUESTION_BANK if q['topic'] == topic)
         topic_sel[topic] = col.checkbox(f"{topic} ({cnt})", True)
     st.markdown("---")
 
@@ -161,8 +167,8 @@ def create_test_page():
         for i, q in enumerate(QUESTION_BANK):
             ok = True
             if not unused    and i not in attempted: ok = False
-            if not incorrect and i in attempted   and st.session_state['test_answers'][i] != q['options'][q['answer']]: ok=False
-            if not correct   and i in attempted   and st.session_state['test_answers'][i] == q['options'][q['answer']]: ok=False
+            if not incorrect and i in attempted and st.session_state['test_answers'][i] != q['options'][q['answer']]: ok=False
+            if not correct   and i in attempted and st.session_state['test_answers'][i] == q['options'][q['answer']]: ok=False
             if not topic_sel.get(q['topic'], False): ok=False
             if ok: filt.append(q)
         n = min(max_q, len(filt))
@@ -175,7 +181,6 @@ def create_test_page():
         })
         st.rerun()
 
-    # Render test if generated
     if st.session_state['test_questions']:
         idx   = st.session_state['test_index']
         total = len(st.session_state['test_questions'])
@@ -205,14 +210,13 @@ def create_test_page():
             with st.expander("Explanation"):
                 st.write(q['explanation'])
 
-    # Final score
-    if st.session_state['test_questions'] and st.session_state['test_index']==len(st.session_state['test_questions'])-1:
+    if st.session_state['test_questions'] and st.session_state['test_index'] == len(st.session_state['test_questions']) - 1:
         if st.button("Submit Test"):
             st.session_state['test_submitted'] = True
         if st.session_state['test_submitted']:
             score = sum(
                 1 for i, q in enumerate(st.session_state['test_questions'])
-                if st.session_state['test_answers'].get(i)==q['options'][q['answer']]
+                if st.session_state['test_answers'].get(i) == q['options'][q['answer']]
             )
             st.markdown("---")
             st.success(f"Final Score: {score} / {len(st.session_state['test_questions'])}")
