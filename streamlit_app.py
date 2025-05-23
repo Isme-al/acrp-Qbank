@@ -7,7 +7,7 @@ import time
 st.set_page_config(
     page_title="ACRP QBank",
     layout="wide",
-    initial_sidebar_state="collapsed"
+    initial_sidebar_state="expanded"
 )
 st.markdown("""
     <style>
@@ -16,7 +16,7 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# ── 2) UWorld‐style CSS overrides ─────────────────────────────────
+# ── 2) UWorld-style CSS overrides ─────────────────────────────────
 st.markdown("""
 <style>
 div.stRadio > label {
@@ -37,14 +37,13 @@ div.stButton > button:hover { background-color: #0e5c99; }
 </style>
 """, unsafe_allow_html=True)
 
-
 # ── 3) Sidebar navigation ────────────────────────────────────────
 pages = ["Dashboard", "Create Test", "Clinical Research Library"]
 with st.sidebar:
     st.title("ACRP QBank")
-    page = st.radio("Navigate", pages)
+    page = st.radio("Go to", pages)
 
-# ── 4) Load questions ─────────────────────────────────────────────
+# ── 4) Load questions once ────────────────────────────────────────
 @st.cache_data
 def load_questions():
     df = pd.read_csv("questions_extracted.csv", encoding="utf-8-sig", dtype=str)
@@ -61,90 +60,96 @@ def load_questions():
 
 QUESTION_BANK = load_questions()
 
-
-# ── 5) Session state defaults ─────────────────────────────────────
+# ── 5) Initialize session state ───────────────────────────────────
 if 'test_questions' not in st.session_state:
     st.session_state.update({
-        'test_questions': [], 'test_index': 0,
-        'test_answers': {}, 'test_submitted': False, 'test_start': None
+        'test_questions': [],
+        'test_index':     0,
+        'test_answers':   {},
+        'test_submitted': False,
+        'test_start':     None
     })
 
-
-# ── 6) Page definitions ───────────────────────────────────────────
+# ── 6) Page implementations ───────────────────────────────────────
 def dashboard_page():
     st.header("Dashboard")
-    st.write("Welcome! Use 'Create Test' to generate a new question set.")
+    st.write("Welcome! Select **Create Test** on the left to begin.")
 
 def create_test_page():
     st.header("Create Test")
     total = len(QUESTION_BANK)
-    attempted = set(st.session_state['test_answers'].keys())
+    attempted = set(st.session_state['test_answers'])
     count_unused = total - len(attempted)
-    count_corr   = sum(
+    count_corr = sum(
         i in attempted and st.session_state['test_answers'][i] == q['options'][q['answer']]
-        for i, q in enumerate(QUESTION_BANK)
+        for i,q in enumerate(QUESTION_BANK)
     )
     count_incorr = sum(
         i in attempted and st.session_state['test_answers'][i] != q['options'][q['answer']]
-        for i, q in enumerate(QUESTION_BANK)
+        for i,q in enumerate(QUESTION_BANK)
     )
 
-    cols = st.columns(5)
-    unused    = cols[0].checkbox(f"Unused ({count_unused})", True)
-    incorrect = cols[1].checkbox(f"Incorrect ({count_incorr})")
-    marked    = cols[2].checkbox("Marked (0)")
-    omitted   = cols[3].checkbox("Omitted (0)")
-    correct   = cols[4].checkbox(f"Correct ({count_corr})")
+    # Filters row
+    c1, c2, c3, c4, c5 = st.columns(5)
+    unused    = c1.checkbox(f"Unused ({count_unused})", True)
+    incorrect = c2.checkbox(f"Incorrect ({count_incorr})")
+    marked    = c3.checkbox("Marked (0)")
+    omitted   = c4.checkbox("Omitted (0)")
+    correct   = c5.checkbox(f"Correct ({count_corr})")
     st.markdown("---")
 
+    # Topic filters
     st.subheader("Subjects")
     topics = sorted({q['topic'] for q in QUESTION_BANK})
-    cols_subj = st.columns(2)
+    cols = st.columns(2)
     topic_sel = {}
     for idx_t, topic in enumerate(topics):
-        col = cols_subj[idx_t % 2]
-        cnt = sum(1 for q in QUESTION_BANK if q['topic'] == topic)
+        col = cols[idx_t % 2]
+        cnt = sum(1 for q in QUESTION_BANK if q['topic']==topic)
         topic_sel[topic] = col.checkbox(f"{topic} ({cnt})", True)
     st.markdown("---")
 
+    # Number of questions
     st.subheader("No. of Questions")
     max_q = st.number_input("Max per block", 1, total, min(40, total), 1)
     st.markdown("---")
 
+    # Generate Test
     if st.button("Generate Test"):
         filt = []
-        for i, q in enumerate(QUESTION_BANK):
+        for i,q in enumerate(QUESTION_BANK):
             ok = True
-            if not unused    and i not in attempted: ok = False
-            if not incorrect and i in attempted   and st.session_state['test_answers'][i] != q['options'][q['answer']]: ok = False
-            if not correct   and i in attempted   and st.session_state['test_answers'][i] == q['options'][q['answer']]: ok = False
-            if not topic_sel.get(q['topic'], False): ok = False
+            if not unused    and i not in attempted: ok=False
+            if not incorrect and i in attempted  and st.session_state['test_answers'][i]!=q['options'][q['answer']]: ok=False
+            if not correct   and i in attempted  and st.session_state['test_answers'][i]==q['options'][q['answer']]: ok=False
+            if not topic_sel.get(q['topic'], False): ok=False
             if ok: filt.append(q)
         n = min(max_q, len(filt))
-        st.session_state.update({
-            'test_questions': random.sample(filt, n),
-            'test_index':     0,
-            'test_answers':   {},
-            'test_submitted': False,
-            'test_start':     time.time()
-        })
+        st.session_state['test_questions'] = random.sample(filt, n)
+        st.session_state['test_index']     = 0
+        st.session_state['test_answers']   = {}
+        st.session_state['test_submitted'] = False
+        st.session_state['test_start']     = time.time()
         st.rerun()
 
+    # Show questions if generated
     if st.session_state['test_questions']:
-        idx   = st.session_state['test_index']
+        idx = st.session_state['test_index']
         total = len(st.session_state['test_questions'])
-        q     = st.session_state['test_questions'][idx]
+        q = st.session_state['test_questions'][idx]
 
-        st.markdown(f"#### Question {idx+1} of {total}   _(Topic: {q['topic']})_")
+        st.subheader(f"Question {idx+1} of {total}   _(Topic: {q['topic']})_")
         choice = st.radio("", q['options'], key=f"ans{idx}")
 
-        c1, c2 = st.columns(2)
-        with c1:
-            if idx > 0 and st.button("← Previous"): 
-                st.session_state['test_index'] -= 1; st.rerun()
-        with c2:
-            if idx < total-1 and st.button("Next →"):
-                st.session_state['test_index'] += 1; st.rerun()
+        pcol,ncol = st.columns(2)
+        with pcol:
+            if idx>0 and st.button("← Previous"):
+                st.session_state['test_index'] -= 1
+                st.rerun()
+        with ncol:
+            if idx< total-1 and st.button("Next →"):
+                st.session_state['test_index'] += 1
+                st.rerun()
 
         if st.button("Submit Answer"):
             st.session_state['test_answers'][idx] = choice
@@ -152,19 +157,20 @@ def create_test_page():
         if idx in st.session_state['test_answers']:
             sel  = st.session_state['test_answers'][idx]
             corr = q['options'][q['answer']]
-            if sel == corr:
+            if sel==corr:
                 st.success("Correct!")
             else:
-                st.error(f"Incorrect. Correct: {corr}")
+                st.error(f"Incorrect. Correct answer: {corr}")
             with st.expander("Explanation"):
                 st.write(q['explanation'])
 
-    if st.session_state['test_questions'] and st.session_state['test_index'] == len(st.session_state['test_questions'])-1:
+    # Final score
+    if st.session_state['test_questions'] and st.session_state['test_index']==len(st.session_state['test_questions'])-1:
         if st.button("Submit Test"):
             st.session_state['test_submitted'] = True
         if st.session_state['test_submitted']:
             score = sum(
-                1 for i, q in enumerate(st.session_state['test_questions'])
+                1 for i,q in enumerate(st.session_state['test_questions'])
                 if st.session_state['test_answers'].get(i)==q['options'][q['answer']]
             )
             st.markdown("---")
@@ -174,7 +180,7 @@ def library_page():
     st.header("Clinical Research Library")
     st.write("Browse study resources here.")
 
-# ── 7) Render the selected page ────────────────────────────────────
+# ── 7) Dispatch to the selected page ──────────────────────────────
 if page == "Dashboard":
     dashboard_page()
 elif page == "Create Test":
