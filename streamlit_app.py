@@ -16,24 +16,9 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# ── 2) UWorld-style CSS overrides ─────────────────────────────────
+# ── 2) UWorld‐style CSS overrides ─────────────────────────────────
 st.markdown("""
 <style>
-.navbar {
-  background-color: #1f77b4;
-  padding: .75rem 1rem;
-  color: white;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
-.navbar-title { font-size: 1.5rem; font-weight: 600; }
-.navbar-nav button {
-  background: transparent; border: none; color: white;
-  margin-left: 1rem; font-size: 1rem; cursor: pointer;
-}
-.navbar-nav button:hover { text-decoration: underline; }
-
 div.stRadio > label {
   display: block; background: #f8f9fa; padding: 1rem;
   margin: .3rem 0; border-radius: .5rem; cursor: pointer;
@@ -43,7 +28,6 @@ div.stRadio > label:hover { background: #e9ecef; }
 div.stRadio > label > div[aria-checked="true"] {
   border: 2px solid #1f77b4 !important; background: #e1ecf9 !important;
 }
-
 div.stButton > button {
   width: 100%; padding: .75rem; font-size: 1rem;
   color: white; background-color: #1f77b4;
@@ -53,25 +37,12 @@ div.stButton > button:hover { background-color: #0e5c99; }
 </style>
 """, unsafe_allow_html=True)
 
-# ── 3) Top navigation bar + Query-param routing ──────────────────
-pages = ["Dashboard", "Create Test", "Clinical Research Library"]
-nav_buttons = "".join(
-    f"<button onclick=\"window.location.search='?page='+encodeURIComponent('{p}')\">{p}</button>"
-    for p in pages
-)
-st.markdown(f"""
-<div class="navbar">
-  <div class="navbar-title">ACRP QBank</div>
-  <div class="navbar-nav">
-    {nav_buttons}
-  </div>
-</div>
-""", unsafe_allow_html=True)
 
-params = st.query_params
-page = params.get("page", [pages[0]])[0]
-if page not in pages:
-    page = pages[0]
+# ── 3) Sidebar navigation ────────────────────────────────────────
+pages = ["Dashboard", "Create Test", "Clinical Research Library"]
+with st.sidebar:
+    st.title("ACRP QBank")
+    page = st.radio("Navigate", pages)
 
 # ── 4) Load questions ─────────────────────────────────────────────
 @st.cache_data
@@ -90,6 +61,7 @@ def load_questions():
 
 QUESTION_BANK = load_questions()
 
+
 # ── 5) Session state defaults ─────────────────────────────────────
 if 'test_questions' not in st.session_state:
     st.session_state.update({
@@ -97,17 +69,18 @@ if 'test_questions' not in st.session_state:
         'test_answers': {}, 'test_submitted': False, 'test_start': None
     })
 
+
 # ── 6) Page definitions ───────────────────────────────────────────
 def dashboard_page():
-    st.markdown("### Dashboard")
+    st.header("Dashboard")
     st.write("Welcome! Use 'Create Test' to generate a new question set.")
 
 def create_test_page():
-    st.markdown("### Create Test")
+    st.header("Create Test")
     total = len(QUESTION_BANK)
     attempted = set(st.session_state['test_answers'].keys())
     count_unused = total - len(attempted)
-    count_corr = sum(
+    count_corr   = sum(
         i in attempted and st.session_state['test_answers'][i] == q['options'][q['answer']]
         for i, q in enumerate(QUESTION_BANK)
     )
@@ -142,9 +115,9 @@ def create_test_page():
         filt = []
         for i, q in enumerate(QUESTION_BANK):
             ok = True
-            if not unused and i not in attempted: ok = False
-            if not incorrect and i in attempted and st.session_state['test_answers'][i] != q['options'][q['answer']]: ok = False
-            if not correct and i in attempted and st.session_state['test_answers'][i] == q['options'][q['answer']]: ok = False
+            if not unused    and i not in attempted: ok = False
+            if not incorrect and i in attempted   and st.session_state['test_answers'][i] != q['options'][q['answer']]: ok = False
+            if not correct   and i in attempted   and st.session_state['test_answers'][i] == q['options'][q['answer']]: ok = False
             if not topic_sel.get(q['topic'], False): ok = False
             if ok: filt.append(q)
         n = min(max_q, len(filt))
@@ -167,7 +140,7 @@ def create_test_page():
 
         c1, c2 = st.columns(2)
         with c1:
-            if idx > 0 and st.button("← Previous"):
+            if idx > 0 and st.button("← Previous"): 
                 st.session_state['test_index'] -= 1; st.rerun()
         with c2:
             if idx < total-1 and st.button("Next →"):
@@ -186,22 +159,22 @@ def create_test_page():
             with st.expander("Explanation"):
                 st.write(q['explanation'])
 
-    if st.session_state['test_questions'] and st.session_state['test_index'] == len(st.session_state['test_questions']) - 1:
+    if st.session_state['test_questions'] and st.session_state['test_index'] == len(st.session_state['test_questions'])-1:
         if st.button("Submit Test"):
             st.session_state['test_submitted'] = True
         if st.session_state['test_submitted']:
             score = sum(
                 1 for i, q in enumerate(st.session_state['test_questions'])
-                if st.session_state['test_answers'].get(i) == q['options'][q['answer']]
+                if st.session_state['test_answers'].get(i)==q['options'][q['answer']]
             )
             st.markdown("---")
             st.success(f"Final Score: {score} / {len(st.session_state['test_questions'])}")
 
 def library_page():
-    st.markdown("### Clinical Research Library")
+    st.header("Clinical Research Library")
     st.write("Browse study resources here.")
 
-# ── 8) Render the selected page ────────────────────────────────────
+# ── 7) Render the selected page ────────────────────────────────────
 if page == "Dashboard":
     dashboard_page()
 elif page == "Create Test":
